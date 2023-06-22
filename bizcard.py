@@ -6,9 +6,10 @@ import pandas as pd
 import numpy as np
 import re
 import psycopg2
+import io
 
 # Connecting with database
-conn = psycopg2.connect(host="localhost", user="postgres", password="Smile!098", port=5432, database="bizcard")
+conn = psycopg2.connect(host="localhost", user="postgres", password="password", port=5432, database="bizcard")
 cur = conn.cursor()
 
 st.set_page_config(layout="wide")
@@ -108,6 +109,14 @@ elif selected == "Extract text from image":
         ext_text = extracted_text(result)
         df = pd.DataFrame(ext_text)
         st.dataframe(df)
+        # Converting image into bytes
+        image_bytes = io.BytesIO()
+        input_image.save(image_bytes, format='PNG')
+        image_data = image_bytes.getvalue()
+        #Creating dictionary
+        data = {"Image": [image_data]}
+        df_1 = pd.DataFrame(data)
+        concat_df = pd.concat([df, df_1], axis=1)
 
         # Database
         col1, col2, col3 = st.columns([1, 6, 1])
@@ -129,13 +138,13 @@ elif selected == "Extract text from image":
                 modified_d = st.text_input('Designation', ext_text["Designation"][0])
                 modified_c = st.text_input('Company name', ext_text["Company name"][0])
                 modified_con = st.text_input('Mobile', ext_text["Contact"][0])
-                df["Name"], df["Designation"], df["Company name"], df["Contact"] = modified_n, modified_d, modified_c, modified_con
+                concat_df["Name"], concat_df["Designation"], concat_df["Company name"], concat_df["Contact"] = modified_n, modified_d, modified_c, modified_con
             with col_2:
                 modified_m = st.text_input('Email', ext_text["Email"][0])
                 modified_w = st.text_input('Website', ext_text["Website"][0])
                 modified_a = st.text_input('Address', ext_text["Address"][0])
                 modified_p = st.text_input('Pincode', ext_text["Pincode"][0])
-                df["Email"], df["Website"], df["Address"], df["Pincode"] = modified_m, modified_w, modified_a, modified_p
+                concat_df["Email"], concat_df["Website"], concat_df["Address"], concat_df["Pincode"] = modified_m, modified_w, modified_a, modified_p
 
             col3, col4 = st.columns([4, 4])
             with col3:
@@ -143,7 +152,8 @@ elif selected == "Extract text from image":
             with col4:
                 Upload = st.button("Upload")
             if Preview:
-                st.dataframe(df)
+                filtered_df = concat_df[['Name', 'Designation', 'Company name', 'Contact', 'Email', 'Website', 'Address', 'Pincode']]
+                st.dataframe(filtered_df)
             else:
                 pass
 
@@ -151,12 +161,12 @@ elif selected == "Extract text from image":
                 with st.spinner("In progress"):
                     cur.execute("CREATE TABLE IF NOT EXISTS BUSINESS_CARD(NAME VARCHAR(50), DESIGNATION VARCHAR(100), "
                                 "COMPANY_NAME VARCHAR(100), CONTACT VARCHAR(35), EMAIL VARCHAR(100), WEBSITE VARCHAR("
-                                "100), ADDRESS TEXT, PINCODE VARCHAR(10))")
+                                "100), ADDRESS TEXT, PINCODE VARCHAR(10), IMAGE BYTEA)")
                     conn.commit()
                     A = "INSERT INTO BUSINESS_CARD(NAME, DESIGNATION, COMPANY_NAME, CONTACT, EMAIL, WEBSITE, ADDRESS, " \
-                        "PINCODE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-                    for index, i in df.iterrows():
-                        result_table = (i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7])
+                        "PINCODE, IMAGE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                    for index, i in concat_df.iterrows():
+                        result_table = (i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7], i[8])
                         cur.execute(A, result_table)
                         conn.commit()
                 st.balloons()
